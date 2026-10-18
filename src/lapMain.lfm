@@ -1,0 +1,333 @@
+object LapMainForm: TLapMainForm
+  Left = 10
+  Top = 10
+  Width = 980
+  Height = 780
+  Caption = 'LazAssPicker'
+  Constraints.MinWidth = 820
+  Constraints.MinHeight = 720
+  Position = poScreenCenter
+  SessionProperties = 'Left;Top;Width;Height'
+  OnCreate = FormCreate
+  OnDestroy = FormDestroy
+  OnCloseQuery = FormCloseQuery
+  ShowHint = True
+  object HeaderPanel: TPanel
+    Top = 0
+    Width = 980
+    Align = alTop
+    Height = 110
+    BevelOuter = bvNone
+    TabOrder = 0
+    object Badge: TImage
+      Left = 16
+      Top = 8
+      Width = 88
+      Height = 88
+      Center = True
+      Proportional = True
+      Stretch = True
+    end
+    object ReadOnlyLabel: TLabel
+      Left = 114
+      Top = 78
+      Caption = 'Reads installations and original shortcuts without changing them.'
+      Font.Height = -12
+      ParentFont = False
+    end
+    object TitleLabel: TLabel
+      Left = 114
+      Top = 12
+      Caption = 'LazAssPicker'
+      Font.Height = -26
+      Font.Style = [fsBold]
+      ParentFont = False
+    end
+    object IntroLabel: TLabel
+      Left = 114
+      Top = 50
+      Caption = 'One project, your choice of Lazarus. Each build keeps its own IDE configuration.'
+    end
+    object VersionLabel: TLabel
+      Left = 820
+      Top = 14
+      Anchors = [akTop, akRight]
+      Alignment = taRightJustify
+      AutoSize = False
+      Width = 144
+      Height = 18
+      Caption = 'Version'
+      Font.Height = -12
+      ParentFont = False
+    end
+    object ReleasesLabel: TLabel
+      Left = 784
+      Top = 34
+      Anchors = [akTop, akRight]
+      Alignment = taRightJustify
+      AutoSize = False
+      Width = 180
+      Height = 20
+      Caption = 'Check for new releases'
+      Cursor = crHandPoint
+      Font.Style = [fsUnderline]
+      Hint = 'Opens the LazAssPicker releases page on GitHub in your browser.'
+      OnClick = ReleasesClick
+      ParentFont = False
+    end
+  end
+  object DiscoveryPanel: TPanel
+    Top = 110
+    Width = 980
+    Align = alTop
+    Height = 48
+    BevelOuter = bvNone
+    TabOrder = 1
+    object RescanButton: TButton
+      Left = 16
+      Top = 4
+      Width = 106
+      Height = 32
+      Caption = '&Rescan'
+      Hint = 'Read nearby fpcupdeluxe settings and Lazarus desktop launchers.'
+      OnClick = RescanClick
+      TabOrder = 0
+    end
+    object BrowseButton: TButton
+      Left = 130
+      Top = 4
+      Width = 210
+      Height = 32
+      Caption = 'Scan fpcupdeluxe &folder...'
+      Hint = 'Choose the fpcupdeluxe folder, an install folder, or a parent containing several installs.'
+      OnClick = BrowseClick
+      TabOrder = 1
+    end
+    object ImportButton: TButton
+      Left = 348
+      Top = 4
+      Width = 152
+      Height = 32
+      Caption = '&Import launcher...'
+      OnClick = ImportClick
+      TabOrder = 2
+    end
+    object AddButton: TButton
+      Left = 508
+      Top = 4
+      Width = 110
+      Height = 32
+      Caption = '&Add build...'
+      OnClick = AddClick
+      TabOrder = 3
+    end
+    object RemoveBuildButton: TButton
+      Left = 626
+      Top = 4
+      Width = 126
+      Height = 32
+      Caption = 'Remove build'
+      Hint = 'Remove the selected entry. The Lazarus installation is kept.'
+      OnClick = RemoveBuildClick
+      TabOrder = 4
+    end
+  end
+  object BottomPanel: TPanel
+    Top = 494
+    Width = 980
+    Align = alBottom
+    Height = 286
+    BevelOuter = bvNone
+    TabOrder = 3
+    object DefaultLabel: TLabel
+      Left = 16
+      Top = 12
+      Caption = 'Double-click default'
+      FocusControl = DefaultBuild
+    end
+    object DefaultBuild: TComboBox
+      Left = 172
+      Top = 8
+      Width = 440
+      Height = 30
+      Anchors = [akTop, akLeft, akRight]
+      Style = csDropDownList
+      OnChange = DefaultChange
+      TabOrder = 0
+    end
+    object FileTypes: TCheckGroup
+      Left = 16
+      Top = 48
+      Width = 948
+      Height = 72
+      Anchors = [akTop, akLeft, akRight]
+      Caption = 'File types'
+      Columns = 7
+      OnItemClick = FileTypeClick
+      TabOrder = 1
+      Hint = '.pas, .pp, and .lpr share the system Pascal MIME type and its default.'
+    end
+    object ApplyButton: TButton
+      Left = 16
+      Top = 132
+      Width = 166
+      Height = 34
+      Caption = '&Apply associations'
+      Hint = 'Register checked builds in Open With and set the selected default.'
+      OnClick = ApplyClick
+      TabOrder = 2
+    end
+    object OpenButton: TButton
+      Left = 190
+      Top = 132
+      Width = 186
+      Height = 34
+      Caption = '&Open project or file...'
+      Hint = 'Open in the selected build without changing file associations.'
+      OnClick = OpenClick
+      TabOrder = 3
+    end
+    object RemoveButton: TButton
+      Left = 384
+      Top = 132
+      Width = 180
+      Height = 34
+      Caption = 'Remove associations'
+      Hint = 'Remove this program''s registrations and restore previous defaults where still applicable.'
+      OnClick = RemoveClick
+      TabOrder = 4
+    end
+    object Log: TMemo
+      Left = 16
+      Top = 180
+      Width = 948
+      Height = 94
+      Anchors = [akTop, akBottom, akLeft, akRight]
+      ReadOnly = True
+      ScrollBars = ssAutoVertical
+      TabOrder = 5
+    end
+  end
+  object ProfilesPanel: TPanel
+    Left = 16
+    Top = 158
+    Width = 948
+    Height = 336
+    Align = alClient
+    BorderSpacing.Left = 16
+    BorderSpacing.Right = 16
+    BevelOuter = bvNone
+    TabOrder = 2
+    object Builds: TCheckListBox
+      Align = alLeft
+      Width = 260
+      ItemHeight = 26
+      OnClick = BuildClick
+      OnClickCheck = BuildCheck
+      Hint = 'Select a build to inspect it. Check the builds to include in Open With.'
+      TabOrder = 0
+    end
+    object Splitter: TSplitter
+      Align = alLeft
+      Width = 10
+    end
+    object DetailsPanel: TPanel
+      Left = 270
+      Width = 678
+      Height = 336
+      Align = alClient
+      BevelOuter = bvNone
+      TabOrder = 1
+      object NameLabel: TLabel
+        Left = 8
+        Top = 0
+        Caption = 'Build name'
+        FocusControl = NameEdit
+      end
+      object NameEdit: TEdit
+        Left = 8
+        Top = 22
+        Width = 662
+        Height = 28
+        Anchors = [akTop, akLeft, akRight]
+        OnEditingDone = EditDone
+        TabOrder = 0
+      end
+      object ExecutableLabel: TLabel
+        Left = 8
+        Top = 58
+        Caption = 'Lazarus executable'
+        FocusControl = ExecutableEdit
+      end
+      object ExecutableEdit: TEdit
+        Left = 8
+        Top = 80
+        Width = 662
+        Height = 28
+        Anchors = [akTop, akLeft, akRight]
+        OnEditingDone = EditDone
+        TabOrder = 1
+      end
+      object ArgumentsLabel: TLabel
+        Left = 8
+        Top = 116
+        Caption = 'Launch arguments (including --pcp)'
+        FocusControl = ArgumentsEdit
+      end
+      object ArgumentsEdit: TEdit
+        Left = 8
+        Top = 138
+        Width = 662
+        Height = 28
+        Anchors = [akTop, akLeft, akRight]
+        OnEditingDone = EditDone
+        TabOrder = 2
+      end
+      object DirectoryLabel: TLabel
+        Left = 8
+        Top = 174
+        Caption = 'Working directory'
+        FocusControl = DirectoryEdit
+      end
+      object DirectoryEdit: TEdit
+        Left = 8
+        Top = 196
+        Width = 662
+        Height = 28
+        Anchors = [akTop, akLeft, akRight]
+        OnEditingDone = EditDone
+        TabOrder = 3
+      end
+      object SourceLabel: TLabel
+        Left = 8
+        Top = 238
+        Width = 662
+        Height = 36
+        Anchors = [akTop, akLeft, akRight]
+        AutoSize = False
+        WordWrap = True
+        Caption = 'Source: select or add a build'
+      end
+    end
+  end
+  object FileDialog: TOpenDialog
+    Options = [ofFileMustExist, ofEnableSizing]
+    Left = 48
+    Top = 64
+  end
+  object FolderDialog: TSelectDirectoryDialog
+    Title = 'Scan fpcupdeluxe or Lazarus install folder'
+    Left = 88
+    Top = 64
+  end
+  object Geometry: TIniPropStorage
+    IniSection = 'Window'
+    OnRestoreProperties = GeometryRestore
+    Left = 128
+    Top = 64
+  end
+  object Associations: TFileAssMan
+    Left = 168
+    Top = 64
+  end
+end

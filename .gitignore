@@ -1,0 +1,26 @@
+/*
+!/.gitignore
+!/README.md
+!/ROADMAP.md
+!/LICENSE
+!/build.sh
+!/lazasspicker.lpr
+!/lazasspicker.lpi
+!/src/
+/src/*
+!/src/*.pas
+!/src/*.lfm
+!/icons/
+/icons/*
+!/icons/*.png
+!/icons/*.ico
+!/icons/*.res
+!/images/
+/images/*
+!/images/*.png
+!/VERSION
+!/CHANGELOG.md
+!/release.sh
+
+# Specifications stay private
+*SPEC*.md
