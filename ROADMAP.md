@@ -10,6 +10,7 @@
 - [x] Open projects and source files in the selected build.
 - [x] Remove owned registrations and restore previous default entries.
 - [x] Test discovery, quoting, forwarding, and association lifecycle in isolation.
+- [x] Work out each build's configuration folder as Lazarus does (launch arguments, `lazarus.cfg`, default) and warn when two builds share one.
 - [x] Embed the mascot badge and application icon.
 - [x] Provide GitHub documentation and a screenshot using example installations.
 - [x] Build a versioned Linux release archive with documentation and a checksum.

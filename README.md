@@ -83,6 +83,24 @@ After installing or updating a build with fpcupdeluxe, click **Rescan**, review
 the launch settings, and apply any changes. **Import launcher** handles an
 individual `.desktop` file or shortcut; **Add build** handles a manually installed Lazarus.
 
+## Each build's settings
+
+Under each build, LazAssPicker shows the IDE configuration folder it starts
+with, found the way Lazarus finds it: `--pcp=` (or `--primary-config-path=`)
+in the launch arguments, otherwise the same option in the `lazarus.cfg`
+beside the Lazarus executable, otherwise the default - `~/.lazarus`, or
+`%LOCALAPPDATA%\lazarus` on Windows. A relative folder and `~/` are read as
+Lazarus reads them. The same build found through a shortcut and through a
+folder scan is listed once.
+
+Lazarus versions cannot share one configuration folder, so when two checked
+builds would start with the same one, LazAssPicker says so beside the build
+and again when you apply. Launch arguments that write `--pcp <folder>` with
+a space are refused: Lazarus reads only `--pcp=<folder>` and would open the
+folder as a file. Quotes around the folder in `lazarus.cfg` are pointed
+out: Lazarus 5 takes them off, but 4 and older read them as part of the
+folder's name.
+
 ## What it changes
 
 **Discovery only reads installation files and existing launchers.**

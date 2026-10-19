@@ -308,6 +308,17 @@ object LapMainForm: TLapMainForm
         WordWrap = True
         Caption = 'Source: select or add a build'
       end
+      object ConfigLabel: TLabel
+        Left = 8
+        Top = 278
+        Width = 662
+        Height = 52
+        Anchors = [akTop, akLeft, akRight, akBottom]
+        AutoSize = False
+        WordWrap = True
+        Caption = 'Configuration:'
+        ShowHint = True
+      end
     end
   end
   object FileDialog: TOpenDialog

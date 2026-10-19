@@ -13,7 +13,12 @@ type
     ID, Name, Executable, Arguments, WorkingDirectory, Source, Icon: string;
     Enabled: boolean;
     constructor Create;
+    { The IDE configuration folder this build starts with, worked out as
+      Lazarus does; Explicit is False when only the default applies. }
     function ConfigPath: string;
+    function ConfigPath(out Explicit: boolean): string;
+    // the folder Arguments and WorkingDirectory resolve against
+    function LaunchDirectory: string;
     procedure Validate;
   end;
 
@@ -28,6 +33,7 @@ type
     destructor Destroy; override;
     function Count: integer;
     function FindID(const ID: string): TLapProfile;
+    function IndexOf(Profile: TLapProfile): integer;
     function Add(Profile: TLapProfile): boolean;
     procedure Delete(Index: integer);
     procedure Load;
@@ -42,6 +48,8 @@ type
     function ScanDesktopLaunchers: integer;
     function Discover: integer;
     function ScanFolder(const Directory: string): integer;
+    // another enabled build that starts with the same configuration folder
+    function SharesConfig(Profile: TLapProfile): TLapProfile;
     property Profiles[Index: integer]: TLapProfile read GetProfile; default;
   end;
 
@@ -50,6 +58,18 @@ function LapDataDirectory: string;
 function LapDesktopDirectory: string;
 function LapQuoteArgument(const Value: string): string;
 function LapIsExecutable(const Filename: string): boolean;
+{ Where Lazarus keeps its settings when nothing names a folder:
+  ~/.lazarus, or %LOCALAPPDATA%\lazarus on Windows. }
+function LapDefaultLazarusConfig: string;
+{ The configuration folder of Lazarus started as Executable with Arguments
+  in Directory: the default, then lazarus.cfg beside the executable, then
+  the arguments, the last --pcp or --primary-config-path winning.  Relative
+  folders and ~/ expand as the IDE expands them. }
+function LapConfigOf(const Executable, Arguments, Directory: string; out Explicit: boolean): string;
+{ True when the lazarus.cfg beside Executable puts quotes around a
+  configuration folder: Lazarus 5 takes them off, 4 and older read them as
+  part of the folder's name. }
+function LapCfgQuoted(const Executable: string): boolean;
 procedure LapLaunch(Profile: TLapProfile; Files: TStrings);
 
 const
@@ -59,7 +79,7 @@ const
 implementation
 
 uses
-  IniFiles, UTF8Process, StrUtils, LazFileUtils, FileUtil, FAFormats,
+  IniFiles, UTF8Process, StrUtils, LazFileUtils, LazUTF8, FileUtil, FAFormats,
   {$IFDEF WINDOWS}Windows, ActiveX, ShlObj, ComObj{$ELSE}BaseUnix{$ENDIF};
 
 function LapConfigDirectory: string;
@@ -81,6 +101,118 @@ begin
   {$ELSE}
   Result := FileExists(Filename) and (fpAccess(Filename, X_OK) = 0);
   {$ENDIF}
+end;
+
+function LapDefaultLazarusConfig: string;
+begin
+  {$IFDEF WINDOWS}
+  Result := SysUtils.GetEnvironmentVariable('LOCALAPPDATA');
+  if Result = '' then Result := GetUserDir + 'AppData\Local';
+  Result := IncludeTrailingPathDelimiter(Result) + 'lazarus';
+  {$ELSE}
+  Result := GetUserDir + '.lazarus';
+  {$ENDIF}
+end;
+
+{ A --pcp= or --primary-config-path= option's folder, any case.  Quotes
+  come off only in lazarus.cfg, where no shell took them off first. }
+function ConfigOption(const Param, Base: string; Dequote: boolean; out Folder: string): boolean;
+const
+  Options: array[0..1] of string = ('--primary-config-path=', '--pcp=');
+var
+  Option: string;
+begin
+  Result := False;
+  for Option in Options do
+    if SameText(Copy(Param, 1, Length(Option)), Option) then
+    begin
+      Folder := Copy(Param, Length(Option) + 1, MaxInt);
+      if Dequote then Folder := AnsiDequotedStr(AnsiDequotedStr(Folder, ''''), '"');
+      Folder := ChompPathDelim(ExpandFileNameUTF8(Folder, Base));
+      Exit(True);
+    end;
+end;
+
+function CfgFileOf(const Executable: string): string;
+var
+  Exe: string;
+begin
+  // lazarus.cfg is read beside the program itself, past any symbolic link
+  Result := Executable;
+  {$IFNDEF WINDOWS}
+  Exe := ReadAllLinks(Executable, False);
+  if Exe <> '' then Result := Exe;
+  {$ENDIF}
+  Result := AppendPathDelim(ExtractFileDir(Result)) + 'lazarus.cfg';
+end;
+
+function LapCfgQuoted(const Executable: string): boolean;
+var
+  Lines: TStringList;
+  S: string;
+  I, P: integer;
+begin
+  Result := False;
+  if not FileExists(CfgFileOf(Executable)) then Exit;
+  Lines := TStringList.Create;
+  try
+    Lines.LoadFromFile(CfgFileOf(Executable));
+    for I := 0 to Lines.Count - 1 do
+    begin
+      S := Trim(Lines[I]);
+      P := Pos('=', S);
+      if (P > 0) and (SameText(Copy(S, 1, P), '--pcp=') or SameText(Copy(S, 1, P), '--primary-config-path=')) and
+        (Copy(S, P + 1, 1) <> '') and (S[P + 1] in ['"', '''']) then
+        Exit(True);
+    end;
+  finally
+    Lines.Free;
+  end;
+end;
+
+function LapConfigOf(const Executable, Arguments, Directory: string; out Explicit: boolean): string;
+var
+  Lines, Args: TStringList;
+  Cfg, S, Folder: string;
+  I: integer;
+begin
+  Explicit := False;
+  Result := ChompPathDelim(LapDefaultLazarusConfig);
+  Cfg := CfgFileOf(Executable);
+  Lines := TStringList.Create;
+  Args := TStringList.Create;
+  try
+    if FileExists(Cfg) then
+    begin
+      Lines.LoadFromFile(Cfg);
+      for I := 0 to Lines.Count - 1 do
+      begin
+        S := Lines[I];
+        // Lazarus takes a line only when it starts with the dash
+        if (S = '') or (S[1] <> '-') then Continue;
+        S := Trim(S);
+        {$IFDEF WINDOWS}
+        // the installer writes it in the Windows code page
+        if FindInvalidUTF8Codepoint(PChar(S), Length(S), True) > 0 then S := WinCPToUTF8(S);
+        {$ENDIF}
+        if ConfigOption(S, ExtractFileDir(Cfg), True, Folder) then
+        begin
+          Result := Folder;
+          Explicit := True;
+        end;
+      end;
+    end;
+    if FileAssParseArguments(Arguments, Args) then
+      for I := 0 to Args.Count - 1 do
+        if ConfigOption(Args[I], Directory, False, Folder) then
+        begin
+          Result := Folder;
+          Explicit := True;
+        end;
+  finally
+    Args.Free;
+    Lines.Free;
+  end;
 end;
 
 function LapDataDirectory: string;
@@ -147,31 +279,28 @@ end;
 
 function TLapProfile.ConfigPath: string;
 var
-  Args: TStringList;
-  I: integer;
-  S: string;
+  Explicit: boolean;
 begin
-  Result := '';
-  Args := TStringList.Create;
-  try
-    if not FileAssParseArguments(Arguments, Args) then Exit;
-    for I := 0 to Args.Count - 1 do
-    begin
-      S := Args[I];
-      if AnsiStartsStr('--pcp=', S) then Result := Copy(S, 7, MaxInt)
-      else if AnsiStartsStr('--primary-config-path=', S) then Result := Copy(S, 23, MaxInt)
-      else if ((S = '--pcp') or (S = '--primary-config-path')) and (I + 1 < Args.Count) then
-        Result := Args[I + 1];
-    end;
-  finally
-    Args.Free;
-  end;
+  Result := ConfigPath(Explicit);
+end;
+
+function TLapProfile.ConfigPath(out Explicit: boolean): string;
+begin
+  Result := LapConfigOf(Executable, Arguments, LaunchDirectory, Explicit);
+end;
+
+function TLapProfile.LaunchDirectory: string;
+begin
+  Result := WorkingDirectory;
+  if Result = '' then Result := ExtractFileDir(Executable);
 end;
 
 procedure TLapProfile.Validate;
 var
   Args: TStringList;
   I: integer;
+  Explicit: boolean;
+  Config: string;
 begin
   if Trim(Name) = '' then raise Exception.Create('Enter a name for the Lazarus build.');
   if (Executable = '') or not FilenameIsAbsolute(Executable) or not LapIsExecutable(Executable) then
@@ -185,11 +314,16 @@ begin
   try
     if not FileAssParseArguments(Arguments, Args) then
       raise Exception.Create('The launch arguments contain an unmatched quote.');
+    // Lazarus reads only --pcp=<folder>; a separate value is opened as a file
+    for I := 0 to Args.Count - 1 do
+      if SameText(Args[I], '--pcp') or SameText(Args[I], '--primary-config-path') then
+        raise Exception.Create('Write the configuration folder as ' + Args[I] + '=<folder>: Lazarus reads no separate value and would open the folder as a file.');
   finally
     Args.Free;
   end;
-  if (ConfigPath <> '') and not DirectoryExists(ConfigPath) then
-    raise Exception.Create('The Lazarus configuration directory is missing: ' + ConfigPath);
+  Config := ConfigPath(Explicit);
+  if Explicit and not DirectoryExists(Config) then
+    raise Exception.Create('The Lazarus configuration directory is missing: ' + Config);
 end;
 
 constructor TLapSettings.Create;
@@ -231,8 +365,8 @@ var
   I: integer;
 begin
   for I := 0 to Count - 1 do
-    if (Profiles[I].Executable = Profile.Executable) and ((Profiles[I].ConfigPath = Profile.ConfigPath) or ((Profiles[I].Source <> '') and
-      (Profiles[I].Source = Profile.Source))) then
+    if (Profiles[I].Executable = Profile.Executable) and ((CompareFilenames(Profiles[I].ConfigPath, Profile.ConfigPath) = 0) or
+      ((Profiles[I].Source <> '') and (Profiles[I].Source = Profile.Source))) then
     begin
       // A launcher supplies more precise settings than an install-folder scan.
       if (ExtractFileExt(Profile.Source) = '.desktop') or (ExtractFileExt(Profiles[I].Source) <> '.desktop') then
@@ -249,6 +383,23 @@ begin
   FProfiles.Add(Profile);
   if DefaultID = '' then DefaultID := Profile.ID;
   Result := True;
+end;
+
+function TLapSettings.IndexOf(Profile: TLapProfile): integer;
+begin
+  Result := FProfiles.IndexOf(Profile);
+end;
+
+function TLapSettings.SharesConfig(Profile: TLapProfile): TLapProfile;
+var
+  I: integer;
+  Config: string;
+begin
+  Config := Profile.ConfigPath;
+  for I := 0 to Count - 1 do
+    if (Profiles[I] <> Profile) and Profiles[I].Enabled and (CompareFilenames(Profiles[I].ConfigPath, Config) = 0) then
+      Exit(Profiles[I]);
+  Result := nil;
 end;
 
 procedure TLapSettings.Delete(Index: integer);
@@ -543,36 +694,21 @@ var
 
   procedure AddInstall(const Base: string);
   var
-    Exe, Cfg, Line, PCP: string;
-    Lines: TStringList;
+    Exe, Cfg, PCP: string;
     P: TLapProfile;
-    I: integer;
+    Explicit: boolean;
   begin
     Exe := IncludeTrailingPathDelimiter(Base) + 'lazarus' + PathDelim + 'lazarus' + GetExeExt;
     if not FileExists(Exe) then Exe := IncludeTrailingPathDelimiter(Base) + 'lazarus' + GetExeExt;
     if not LapIsExecutable(Exe) then Exit;
     Cfg := IncludeTrailingPathDelimiter(ExtractFileDir(Exe)) + 'lazarus.cfg';
-    PCP := '';
-    Lines := TStringList.Create;
-    try
-      if FileExists(Cfg) then
-      begin
-        Lines.LoadFromFile(Cfg);
-        for I := 0 to Lines.Count - 1 do
-        begin
-          Line := Trim(Lines[I]);
-          if AnsiStartsStr('--primary-config-path=', Line) then PCP := Copy(Line, 23, MaxInt)
-          else if AnsiStartsStr('--pcp=', Line) then PCP := Copy(Line, 7, MaxInt);
-        end;
-      end;
-    finally
-      Lines.Free;
-    end;
-    PCP := AnsiDequotedStr(PCP, '"');
-    if (PCP = '') and DirectoryExists(IncludeTrailingPathDelimiter(Base) + 'config_lazarus') then
-      PCP := IncludeTrailingPathDelimiter(Base) + 'config_lazarus';
-    if (PCP <> '') and not FilenameIsAbsolute(PCP) then
-      PCP := ExpandFileName(IncludeTrailingPathDelimiter(ExtractFileDir(Exe)) + PCP);
+    PCP := LapConfigOf(Exe, '', ExtractFileDir(Exe), Explicit);
+    // an fpcupdeluxe folder with no lazarus.cfg still has its own settings
+    if not Explicit then
+      if DirectoryExists(IncludeTrailingPathDelimiter(Base) + 'config_lazarus') then
+        PCP := IncludeTrailingPathDelimiter(Base) + 'config_lazarus'
+      else
+        PCP := '';
     P := TLapProfile.Create;
     P.Name := 'Lazarus ' + ExtractFileName(ExcludeTrailingPathDelimiter(Base));
     P.Executable := ExpandFileName(Exe);
@@ -623,7 +759,7 @@ begin
   Proc := TProcessUTF8.Create(nil);
   try
     Proc.Executable := Profile.Executable;
-    Proc.CurrentDirectory := Profile.WorkingDirectory;
+    Proc.CurrentDirectory := Profile.LaunchDirectory;
     if not FileAssParseArguments(Profile.Arguments, Proc.Parameters) then
       raise Exception.Create('Invalid launch arguments.');
     for I := 0 to Files.Count - 1 do Proc.Parameters.Add(ExpandFileName(Files[I]));

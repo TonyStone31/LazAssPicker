@@ -12,7 +12,7 @@ type
   TLapMainForm = class(TForm)
     AddButton, ApplyButton, BrowseButton, ImportButton, OpenButton, RemoveBuildButton, RemoveButton, RescanButton: TButton;
     ArgumentsEdit, DirectoryEdit, ExecutableEdit, NameEdit: TEdit;
-    ArgumentsLabel, DefaultLabel, DirectoryLabel, ExecutableLabel, IntroLabel, NameLabel, ReadOnlyLabel, SourceLabel, TitleLabel: TLabel;
+    ArgumentsLabel, ConfigLabel, DefaultLabel, DirectoryLabel, ExecutableLabel, IntroLabel, NameLabel, ReadOnlyLabel, SourceLabel, TitleLabel: TLabel;
     BottomPanel, DetailsPanel, DiscoveryPanel, HeaderPanel, ProfilesPanel: TPanel;
     Builds: TCheckListBox;
     Badge: TImage;
@@ -53,11 +53,12 @@ type
     procedure ShowSelected;
     procedure SaveChoices;
     procedure ReportError(E: Exception);
+    function ConfigText(P: TLapProfile): string;
   end;
 
 const
   // release.sh checks that this matches the VERSION file.
-  LapVersion = '0.2.0';
+  LapVersion = '0.3.0';
   LapReleasesURL = 'https://github.com/TonyStone31/LazAssPicker/releases';
 
 var
@@ -138,6 +139,25 @@ begin
   MessageDlg('LazAssPicker', E.Message, mtError, [mbOK], 0);
 end;
 
+{ Which settings folder the build starts with, and a warning when another
+  checked build starts with the same one: Lazarus versions cannot share a
+  configuration, and an older one may not read what a newer one wrote. }
+function TLapMainForm.ConfigText(P: TLapProfile): string;
+var
+  Explicit: boolean;
+  Other: TLapProfile;
+begin
+  Other := FSettings.SharesConfig(P);
+  if Other <> nil then
+    Result := 'Configuration, also used by "' + Other.Name + '" - each build needs its own: '
+  else
+    Result := 'Configuration: ';
+  Result := Result + P.ConfigPath(Explicit);
+  if not Explicit then Result := Result + ' (the Lazarus default; add --pcp=<folder> to give this build its own)';
+  if LapCfgQuoted(P.Executable) then
+    Result := Result + LineEnding + 'Its lazarus.cfg puts quotes around the folder: Lazarus 4 and older read them as part of the name. Write it without quotes.';
+end;
+
 procedure TLapMainForm.StoreSelected;
 var
   P: TLapProfile;
@@ -164,6 +184,7 @@ begin
     ArgumentsEdit.Clear;
     DirectoryEdit.Clear;
     SourceLabel.Caption := 'Source: select or add a build';
+    ConfigLabel.Caption := '';
     if not DetailsPanel.Enabled then Exit;
     P := FSettings[FSelected];
     NameEdit.Text := P.Name;
@@ -172,6 +193,8 @@ begin
     DirectoryEdit.Text := P.WorkingDirectory;
     SourceLabel.Caption := 'Source: ' + P.Source;
     SourceLabel.Hint := SourceLabel.Caption;
+    ConfigLabel.Caption := ConfigText(P);
+    ConfigLabel.Hint := ConfigLabel.Caption;
   finally
     FUpdating := False;
   end;
@@ -353,10 +376,22 @@ begin
 end;
 
 procedure TLapMainForm.ApplyClick(Sender: TObject);
+var
+  I: integer;
+  Other: TLapProfile;
 begin
   try
     SaveChoices;
     LapApply(FSettings, Associations, Log.Lines);
+    // each pair once
+    for I := 0 to FSettings.Count - 1 do
+      if FSettings[I].Enabled then
+      begin
+        Other := FSettings.SharesConfig(FSettings[I]);
+        if (Other <> nil) and (FSettings.IndexOf(Other) > I) then
+          Log.Lines.Add('Warning: "' + FSettings[I].Name + '" and "' + Other.Name + '" use the same configuration, ' +
+            FSettings[I].ConfigPath + '. Give one of them --pcp=<folder>.');
+      end;
   except
     on E: Exception do ReportError(E);
   end;

@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.3.0
+
+- Each build shows the configuration folder it starts with, worked out as
+  Lazarus does: the launch arguments, then `lazarus.cfg` beside the
+  executable, then the default. `~/` and relative folders are read as
+  Lazarus reads them, and a build found through a shortcut and a folder
+  scan is listed once.
+- A warning beside the build and when applying when two checked builds
+  would share one configuration folder.
+- `--pcp <folder>` written with a space is refused instead of being passed
+  on, where Lazarus would open the folder as a file.
+- Quotes around the folder in `lazarus.cfg` are pointed out: Lazarus 4 and
+  older read them as part of the folder's name.
+
 ## 0.2.0
 
 - Windows: finds builds beside fpcupdeluxe and from desktop and Start menu
